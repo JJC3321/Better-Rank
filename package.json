@@ -63,7 +63,7 @@
     "@ai-sdk/react": "^3.0.0",
     "swr": "^2.2.5",
     "uuid": "^9.0.0",
-    "braintrust": "^0.0.182"
+    "braintrust": "^0.0.200"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
