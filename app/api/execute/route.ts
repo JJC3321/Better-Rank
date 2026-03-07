@@ -1,4 +1,5 @@
 import { generateText } from 'ai'
+import { google } from '@ai-sdk/google'
 import { v4 as uuidv4 } from 'uuid'
 import { logToArize, countBrandMentions } from '@/lib/arize'
 import type { PromptExecution, AnalysisResult } from '@/lib/types'
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
       const startTime = Date.now()
       
       const result = await generateText({
-        model: 'google/gemini-2.5-flash',
+        model: google('gemini-2.5-flash-preview-05-20'),
         prompt: prompt,
         maxOutputTokens: 2048,
       })

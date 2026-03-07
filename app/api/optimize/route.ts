@@ -1,4 +1,5 @@
 import { generateText, Output } from 'ai'
+import { google } from '@ai-sdk/google'
 import { z } from 'zod'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
@@ -69,7 +70,7 @@ Generate comprehensive, actionable recommendations to optimize BetterHelp's onli
 Be specific, practical, and data-driven in your recommendations.`
 
     const result = await generateText({
-      model: 'google/gemini-2.5-flash',
+      model: google('gemini-2.5-flash-preview-05-20'),
       prompt,
       maxOutputTokens: 4096,
       output: Output.object({
