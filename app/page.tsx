@@ -12,6 +12,8 @@ import { Separator } from '@/components/ui/separator'
 import { AlertCircle, Brain, BarChart3, Sparkles, RotateCcw } from 'lucide-react'
 import type { FullAnalysisState, AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
+const APP_NAME = 'Better Rank'
+
 export default function HomePage() {
   const [state, setState] = useState<FullAnalysisState>({
     status: 'idle',
@@ -31,7 +33,6 @@ export default function HomePage() {
     }))
 
     try {
-      // Step 1: Execute prompts with Gemini
       const executeResponse = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,7 +52,6 @@ export default function HomePage() {
         analysis,
       }))
 
-      // Step 2: Analyze websites with Tavily
       const analyzeResponse = await fetch('/api/analyze-websites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +71,6 @@ export default function HomePage() {
         websiteAnalysis,
       }))
 
-      // Step 3: Generate optimization feedback
       const optimizeResponse = await fetch('/api/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +91,6 @@ export default function HomePage() {
       }))
 
     } catch (error) {
-      console.error('[v0] Analysis error:', error)
       setState(prev => ({
         ...prev,
         status: 'error',
@@ -115,7 +113,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
@@ -123,7 +120,7 @@ export default function HomePage() {
               <Brain className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">LLM Brand Monitor</h1>
+              <h1 className="text-xl font-bold tracking-tight">{APP_NAME}</h1>
               <p className="text-xs text-muted-foreground">
                 Analyze and optimize brand visibility in AI responses
               </p>
@@ -140,7 +137,6 @@ export default function HomePage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-5xl space-y-8">
-          {/* Hero Section - Only show on idle */}
           {state.status === 'idle' && (
             <div className="text-center">
               <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
@@ -169,7 +165,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Input Form - Only show when idle */}
           {state.status === 'idle' && (
             <AnalysisForm 
               onSubmit={runAnalysis} 
@@ -177,12 +172,10 @@ export default function HomePage() {
             />
           )}
 
-          {/* Progress Indicator */}
           {state.status !== 'idle' && state.status !== 'complete' && state.status !== 'error' && (
             <AnalysisProgress state={state} />
           )}
 
-          {/* Error State */}
           {state.status === 'error' && (
             <Card className="border-destructive/50 bg-destructive/5">
               <CardContent className="flex items-center gap-4 pt-6">
@@ -198,7 +191,6 @@ export default function HomePage() {
             </Card>
           )}
 
-          {/* Results Section */}
           {state.analysis && (state.status === 'complete' || state.status === 'analyzing' || state.status === 'optimizing') && (
             <>
               <Separator />
@@ -212,7 +204,6 @@ export default function HomePage() {
             </>
           )}
 
-          {/* Website Analysis */}
           {state.websiteAnalysis && (state.status === 'complete' || state.status === 'optimizing') && (
             <>
               <Separator />
@@ -222,7 +213,6 @@ export default function HomePage() {
             </>
           )}
 
-          {/* Optimization Feedback */}
           {state.optimization && state.status === 'complete' && (
             <>
               <Separator />
@@ -234,7 +224,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="mt-auto border-t border-border/50 bg-card/30 py-4">
         <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
           Powered by Gemini Flash 2.5, Braintrust, and Tavily
