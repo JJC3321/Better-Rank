@@ -70,7 +70,7 @@ Generate comprehensive, actionable recommendations to optimize BetterHelp's onli
 Be specific, practical, and data-driven in your recommendations.`
 
     const result = await generateText({
-      model: google('gemini-2.5-flash-preview-05-20'),
+      model: google('gemini-1.5-flash'),
       prompt,
       maxOutputTokens: 4096,
       output: Output.object({
