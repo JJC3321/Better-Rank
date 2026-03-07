@@ -1,90 +1,90 @@
-import { GoogleGenAI } from '@google/genai'
+import * as googleGenAI from '@google/genai'
 import { v4 as uuidv4 } from 'uuid'
 
 const BRAINTRUST_PROJECT_NAME = 'llm-brand-monitor'
 
 function isValidBraintrustKey(key: string | undefined): boolean {
-  if (!key) return false
-  const parts = key.split('.')
-  return parts.length === 3 && parts.every(part => part.length > 0)
+  if (!key || typeof key !== 'string') return false
+  const trimmed = key.trim()
+  if (trimmed.length < 10) return false
+  return trimmed.startsWith('sk-') || trimmed.split('.').length === 3
 }
 
 const braintrustApiKey = process.env.BRAINTRUST_API_KEY
 const hasBraintrustKey = isValidBraintrustKey(braintrustApiKey)
 
+type GenAIClient = InstanceType<typeof googleGenAI.GoogleGenAI>
+let genAIClient: GenAIClient | null = null
 let logger: Awaited<ReturnType<typeof import('braintrust').initLogger>> | null = null
-let loggerInitialized = false
+let clientInitialized = false
+
+async function getGenAIClient(): Promise<GenAIClient> {
+  if (clientInitialized && genAIClient) return genAIClient
+
+  if (hasBraintrustKey && braintrustApiKey) {
+    try {
+      const { initLogger, wrapGoogleGenAI } = await import('braintrust')
+      logger = initLogger({
+        projectName: BRAINTRUST_PROJECT_NAME,
+        apiKey: braintrustApiKey,
+      })
+      const { GoogleGenAI } = wrapGoogleGenAI(googleGenAI)
+      genAIClient = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY || '',
+      })
+    } catch (error) {
+      console.error('[v0] Failed to initialize Braintrust-wrapped Gemini client:', error)
+      genAIClient = new googleGenAI.GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY || '',
+      })
+    }
+  } else {
+    genAIClient = new googleGenAI.GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || '',
+    })
+  }
+
+  clientInitialized = true
+  return genAIClient
+}
+
+const genAI = new googleGenAI.GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+})
 
 async function getLogger() {
   if (!hasBraintrustKey) return null
-  if (loggerInitialized) return logger
-
-  try {
-    const { initLogger } = await import('braintrust')
-    logger = initLogger({
-      projectName: BRAINTRUST_PROJECT_NAME,
-      apiKey: braintrustApiKey,
-    })
-    loggerInitialized = true
-    return logger
-  } catch (error) {
-    console.error('[v0] Failed to initialize Braintrust logger:', error)
-    loggerInitialized = true
-    return null
-  }
+  if (logger) return logger
+  await getGenAIClient()
+  return logger
 }
-
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-})
 
 export async function tracedGeminiCall(
   prompt: string,
   executionIndex: number
 ): Promise<{ text: string; spanId: string }> {
-  const btLogger = await getLogger()
+  const client = await getGenAIClient()
 
-  if (btLogger) {
-    const { currentSpan } = await import('braintrust')
-    return await btLogger.traced(
-      async (span) => {
-        span.log({
-          input: prompt,
-          metadata: {
-            model: 'gemini-2.5-flash',
-            execution_index: executionIndex,
-          },
-        })
-        const startTime = Date.now()
-        const response = await genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-          config: { maxOutputTokens: 2048 },
-        })
-        const text = response.text || ''
-        const duration = Date.now() - startTime
-        span.log({
-          output: text,
-          metadata: {
-            model: 'gemini-2.5-flash',
-            execution_index: executionIndex,
-            duration_ms: duration,
-          },
-        })
-        return { text, spanId: currentSpan().id }
-      },
-      { name: 'gemini-call', type: 'llm' }
-    )
-  }
-
-  const spanId = uuidv4()
-  const startTime = Date.now()
-  const response = await genAI.models.generateContent({
+  const response = await client.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: { maxOutputTokens: 2048 },
   })
+
   const text = response.text || ''
+
+  let spanId: string
+  if (logger) {
+    try {
+      const { currentSpan } = await import('braintrust')
+      spanId = currentSpan()?.id ?? uuidv4()
+    } catch {
+      spanId = uuidv4()
+    }
+  } else {
+    spanId = uuidv4()
+  }
+
   return { text, spanId }
 }
 
