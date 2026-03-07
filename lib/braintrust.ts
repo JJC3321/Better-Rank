@@ -1,4 +1,4 @@
-import * as googleGenAI from '@google/genai'
+import { GoogleGenAI } from '@google/genai'
 import { v4 as uuidv4 } from 'uuid'
 
 const BRAINTRUST_PROJECT_NAME = 'llm-brand-monitor'
@@ -14,74 +14,81 @@ function isValidBraintrustKey(key: string | undefined): boolean {
   return trimmed.startsWith('sk-') || trimmed.split('.').length === 3
 }
 
-type GenAIClient = InstanceType<typeof googleGenAI.GoogleGenAI>
-let client: GenAIClient | null = null
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+})
+
 let logger: Awaited<ReturnType<typeof import('braintrust').initLogger>> | null = null
-let initialized = false
+let loggerInitialized = false
 
-async function getClient(): Promise<GenAIClient> {
-  if (initialized && client) return client
-
+async function getLogger() {
+  if (loggerInitialized) return logger
   const apiKey = getBraintrustApiKey()
-  const useBraintrust = isValidBraintrustKey(apiKey)
-
-  if (useBraintrust && apiKey) {
-    try {
-      const { initLogger, wrapGoogleGenAI } = await import('braintrust')
-      logger = initLogger({
-        projectName: BRAINTRUST_PROJECT_NAME,
-        apiKey,
-        asyncFlush: false,
-      })
-      const { GoogleGenAI } = wrapGoogleGenAI(googleGenAI)
-      client = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY || '',
-      })
-    } catch (error) {
-      console.error('[braintrust] Init failed, using raw client:', error)
-      client = new googleGenAI.GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY || '',
-      })
-    }
-  } else {
-    client = new googleGenAI.GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY || '',
-    })
+  if (!isValidBraintrustKey(apiKey)) {
+    loggerInitialized = true
+    return null
   }
-
-  initialized = true
-  return client
+  try {
+    const { initLogger } = await import('braintrust')
+    logger = initLogger({
+      projectName: BRAINTRUST_PROJECT_NAME,
+      apiKey: apiKey!,
+      asyncFlush: false,
+    })
+  } catch (error) {
+    console.error('[braintrust] init failed:', error)
+  }
+  loggerInitialized = true
+  return logger
 }
 
-export async function getGenAI(): Promise<GenAIClient> {
-  return getClient()
+export async function getGenAI() {
+  return genAI
 }
 
 export async function tracedGeminiCall(
   prompt: string,
   executionIndex: number
 ): Promise<{ text: string; spanId: string }> {
-  const genAI = await getClient()
+  const btLogger = await getLogger()
+
+  if (btLogger) {
+    const { currentSpan } = await import('braintrust')
+    const result = await btLogger.traced(
+      async (span) => {
+        span.log({
+          input: prompt,
+          metadata: { model: 'gemini-2.5-flash', execution_index: executionIndex },
+        })
+        const start = Date.now()
+        const response = await genAI.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { maxOutputTokens: 2048 },
+        })
+        const text = response.text ?? ''
+        span.log({
+          output: text,
+          metadata: {
+            model: 'gemini-2.5-flash',
+            execution_index: executionIndex,
+            duration_ms: Date.now() - start,
+          },
+        })
+        return { text, spanId: currentSpan().id }
+      },
+      { name: 'gemini-call', type: 'llm' }
+    )
+    return result
+  }
 
   const response = await genAI.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: { maxOutputTokens: 2048 },
   })
-
   const text = response.text ?? ''
-  let spanId: string
-  if (logger) {
-    try {
-      const { currentSpan } = await import('braintrust')
-      spanId = currentSpan()?.id ?? uuidv4()
-    } catch {
-      spanId = uuidv4()
-    }
-  } else {
-    spanId = uuidv4()
-  }
-  return { text, spanId }
+  return { text, spanId: uuidv4() }
 }
 
 export function countBrandMentions(text: string, brand: string): number {
@@ -91,17 +98,14 @@ export function countBrandMentions(text: string, brand: string): number {
 }
 
 export async function flushLogs() {
-  if (logger) {
-    try {
-      await logger.flush()
-    } catch (error) {
-      console.error('[braintrust] Flush error:', error)
-    }
+  const btLogger = await getLogger()
+  if (!btLogger) return
+  try {
+    await btLogger.flush()
+    await new Promise((r) => setTimeout(r, 500))
+  } catch (error) {
+    console.error('[braintrust] flush error:', error)
   }
 }
-
-const genAI = new googleGenAI.GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-})
 
 export { genAI }
