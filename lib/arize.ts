@@ -11,9 +11,24 @@ interface ArizeSpan {
   attributes: Record<string, unknown>
 }
 
+// Convert timestamp to nanoseconds (OTLP expects nanoseconds)
+function toNanos(ms: number): string {
+  return (BigInt(ms) * BigInt(1_000_000)).toString()
+}
+
+// Generate a hex trace ID (32 hex chars = 16 bytes)
+function generateTraceId(): string {
+  return uuidv4().replace(/-/g, '')
+}
+
+// Generate a hex span ID (16 hex chars = 8 bytes)
+function generateSpanId(): string {
+  return uuidv4().replace(/-/g, '').substring(0, 16)
+}
+
 export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): Promise<string> {
-  const traceId = uuidv4()
-  const spanId = uuidv4()
+  const traceId = generateTraceId()
+  const spanId = generateSpanId()
 
   const apiKey = process.env.ARIZE_API_KEY
   const spaceId = process.env.ARIZE_SPACE_ID
@@ -24,45 +39,65 @@ export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): P
   }
 
   try {
-    // Arize Phoenix/Arize AI HTTP logging
-    const payload = {
-      model_id: 'llm-brand-monitor',
-      model_version: '1.0.0',
-      model_type: 'llm',
-      prediction_id: traceId,
-      prediction_timestamp: new Date().toISOString(),
-      prediction_label: {
-        input: span.input,
-        output: span.output,
-      },
-      actual_label: null,
-      features: {
-        prompt_length: span.input.length,
-        response_length: span.output.length,
-        latency_ms: span.endTime - span.startTime,
-        ...span.attributes,
-      },
-      tags: {
-        source: 'llm-brand-monitor',
-        operation: span.name,
-      },
-      embeddings: null,
+    // Build OTLP-compatible span payload for Arize
+    const otlpPayload = {
+      resourceSpans: [
+        {
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'llm-brand-monitor' } },
+              { key: 'service.version', value: { stringValue: '1.0.0' } },
+            ],
+          },
+          scopeSpans: [
+            {
+              scope: {
+                name: 'llm-brand-monitor',
+                version: '1.0.0',
+              },
+              spans: [
+                {
+                  traceId: traceId,
+                  spanId: spanId,
+                  name: span.name,
+                  kind: 3, // SPAN_KIND_CLIENT
+                  startTimeUnixNano: toNanos(span.startTime),
+                  endTimeUnixNano: toNanos(span.endTime),
+                  attributes: [
+                    { key: 'llm.input', value: { stringValue: span.input.substring(0, 10000) } },
+                    { key: 'llm.output', value: { stringValue: span.output.substring(0, 10000) } },
+                    { key: 'llm.model', value: { stringValue: 'gemini-2.5-flash' } },
+                    { key: 'llm.provider', value: { stringValue: 'google' } },
+                    ...Object.entries(span.attributes).map(([key, value]) => ({
+                      key: `custom.${key}`,
+                      value: typeof value === 'number' 
+                        ? { intValue: Math.round(value).toString() }
+                        : { stringValue: String(value) },
+                    })),
+                  ],
+                  status: { code: 1 }, // STATUS_CODE_OK
+                },
+              ],
+            },
+          ],
+        },
+      ],
     }
 
-    // Log to Arize via their HTTP API
-    const response = await fetch('https://api.arize.com/v1/log', {
+    // Send to Arize OTLP endpoint
+    const response = await fetch('https://otlp.arize.com/v1/traces', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'Space-Id': spaceId,
+        'space_id': spaceId,
+        'api_key': apiKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(otlpPayload),
     })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.log('[v0] Arize API error:', response.status, errorText)
+      console.log('[v0] Arize OTLP error:', response.status, errorText)
     } else {
       console.log('[v0] Successfully logged to Arize:', traceId)
     }
