@@ -1,17 +1,38 @@
-import { initLogger } from 'braintrust'
 import { GoogleGenAI } from '@google/genai'
 import { v4 as uuidv4 } from 'uuid'
 
-// Check if Braintrust API key is available
-const hasBraintrustKey = !!process.env.BRAINTRUST_API_KEY
+// Validate Braintrust API key format (should be a JWT with 3 parts)
+function isValidBraintrustKey(key: string | undefined): boolean {
+  if (!key) return false
+  const parts = key.split('.')
+  return parts.length === 3 && parts.every(part => part.length > 0)
+}
 
-// Initialize the Braintrust logger only if API key exists
-const logger = hasBraintrustKey
-  ? initLogger({
+const braintrustApiKey = process.env.BRAINTRUST_API_KEY
+const hasBraintrustKey = isValidBraintrustKey(braintrustApiKey)
+
+// Lazy initialization of Braintrust logger to avoid auth errors at startup
+let logger: ReturnType<typeof import('braintrust').initLogger> | null = null
+let loggerInitialized = false
+
+async function getLogger() {
+  if (!hasBraintrustKey) return null
+  if (loggerInitialized) return logger
+  
+  try {
+    const { initLogger } = await import('braintrust')
+    logger = initLogger({
       projectName: 'llm-brand-monitor',
-      apiKey: process.env.BRAINTRUST_API_KEY,
+      apiKey: braintrustApiKey,
     })
-  : null
+    loggerInitialized = true
+    return logger
+  } catch (error) {
+    console.error('[v0] Failed to initialize Braintrust logger:', error)
+    loggerInitialized = true // Don't retry
+    return null
+  }
+}
 
 // Configure Google AI SDK client
 const genAI = new GoogleGenAI({
@@ -39,9 +60,10 @@ export async function tracedGeminiCall(
     const duration = Date.now() - startTime
 
     // Log to Braintrust if available (non-blocking)
-    if (logger) {
+    const btLogger = await getLogger()
+    if (btLogger) {
       try {
-        logger.log({
+        btLogger.log({
           id: spanId,
           input: prompt,
           output: text,
@@ -70,13 +92,14 @@ export function countBrandMentions(text: string, brand: string): number {
 }
 
 export async function flushLogs() {
-  if (logger) {
+  const btLogger = await getLogger()
+  if (btLogger) {
     try {
-      await logger.flush()
+      await btLogger.flush()
     } catch (error) {
       console.error('[v0] Braintrust flush error (non-fatal):', error)
     }
   }
 }
 
-export { genAI, logger }
+export { genAI }
