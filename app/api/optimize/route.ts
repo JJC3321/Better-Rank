@@ -1,4 +1,4 @@
-import { client } from '@/lib/braintrust'
+import { genAI } from '@/lib/braintrust'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
 export async function POST(req: Request) {
@@ -67,8 +67,8 @@ Respond with a JSON object in the following exact format (no markdown, just pure
 
 Be specific, practical, and data-driven in your recommendations. Include at least 3-5 items in each category.`
 
-    // Use the wrapped client - Braintrust automatically traces this call
-    const response = await client.models.generateContent({
+    // Use the Google GenAI client
+    const response = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
