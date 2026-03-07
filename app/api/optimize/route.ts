@@ -1,10 +1,5 @@
-import { GoogleGenAI } from '@google/genai'
+import { getGenAI } from '@/lib/braintrust'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
-
-// Initialize Google AI SDK directly to avoid import issues
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-})
 
 export async function POST(req: Request) {
   try {
@@ -72,6 +67,7 @@ Respond with a JSON object in the following exact format (no markdown, just pure
 
 Be specific, practical, and data-driven in your recommendations. Include at least 3-5 items in each category.`
 
+    const genAI = await getGenAI()
     const response = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
