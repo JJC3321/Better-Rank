@@ -63,11 +63,12 @@
     "@ai-sdk/react": "^3.0.0",
     "swr": "^2.2.5",
     "uuid": "^9.0.0",
-    "@opentelemetry/api": "^1.7.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.48.0",
-    "@opentelemetry/resources": "^1.22.0",
-    "@opentelemetry/sdk-trace-base": "^1.22.0",
-    "@opentelemetry/semantic-conventions": "^1.22.0"
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.30.0",
+    "@grpc/grpc-js": "^1.12.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",

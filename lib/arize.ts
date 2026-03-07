@@ -11,14 +11,10 @@ interface ArizeSpan {
   attributes: Record<string, unknown>
 }
 
-// Convert timestamp to nanoseconds (OTLP expects nanoseconds)
-function toNanos(ms: number): string {
-  return (BigInt(ms) * BigInt(1_000_000)).toString()
-}
-
 // Generate a hex trace ID (32 hex chars = 16 bytes)
 function generateTraceId(): string {
-  return uuidv4().replace(/-/g, '')
+  const uuid = uuidv4().replace(/-/g, '')
+  return uuid
 }
 
 // Generate a hex span ID (16 hex chars = 8 bytes)
@@ -26,27 +22,63 @@ function generateSpanId(): string {
   return uuidv4().replace(/-/g, '').substring(0, 16)
 }
 
+// Convert hex string to base64
+function hexToBase64(hex: string): string {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16)
+  }
+  return Buffer.from(bytes).toString('base64')
+}
+
 export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): Promise<string> {
-  const traceId = generateTraceId()
-  const spanId = generateSpanId()
+  const traceIdHex = generateTraceId()
+  const spanIdHex = generateSpanId()
 
   const apiKey = process.env.ARIZE_API_KEY
   const spaceId = process.env.ARIZE_SPACE_ID
 
   if (!apiKey || !spaceId) {
     console.log('[v0] Arize credentials not configured, skipping log')
-    return traceId
+    return traceIdHex
   }
 
   try {
-    // Build OTLP-compatible span payload for Arize
+    // Convert timestamps to nanoseconds as strings for OTLP
+    const startTimeNanos = (BigInt(span.startTime) * BigInt(1_000_000)).toString()
+    const endTimeNanos = (BigInt(span.endTime) * BigInt(1_000_000)).toString()
+
+    // Build attributes array in OTLP format
+    const attributes = [
+      { key: 'openinference.span.kind', value: { stringValue: 'LLM' } },
+      { key: 'llm.model_name', value: { stringValue: 'gemini-2.5-flash' } },
+      { key: 'llm.provider', value: { stringValue: 'google' } },
+      { key: 'input.value', value: { stringValue: span.input.substring(0, 10000) } },
+      { key: 'output.value', value: { stringValue: span.output.substring(0, 10000) } },
+      { key: 'llm.input_messages', value: { stringValue: JSON.stringify([{ role: 'user', content: span.input.substring(0, 5000) }]) } },
+      { key: 'llm.output_messages', value: { stringValue: JSON.stringify([{ role: 'assistant', content: span.output.substring(0, 5000) }]) } },
+    ]
+
+    // Add custom attributes
+    for (const [key, value] of Object.entries(span.attributes)) {
+      if (typeof value === 'number') {
+        attributes.push({ key: `metadata.${key}`, value: { intValue: String(Math.round(value)) } })
+      } else if (typeof value === 'string') {
+        attributes.push({ key: `metadata.${key}`, value: { stringValue: value } })
+      } else {
+        attributes.push({ key: `metadata.${key}`, value: { stringValue: JSON.stringify(value) } })
+      }
+    }
+
+    // Build OTLP JSON payload
     const otlpPayload = {
       resourceSpans: [
         {
           resource: {
             attributes: [
               { key: 'service.name', value: { stringValue: 'llm-brand-monitor' } },
-              { key: 'service.version', value: { stringValue: '1.0.0' } },
+              { key: 'telemetry.sdk.language', value: { stringValue: 'nodejs' } },
+              { key: 'telemetry.sdk.name', value: { stringValue: 'opentelemetry' } },
             ],
           },
           scopeSpans: [
@@ -57,24 +89,13 @@ export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): P
               },
               spans: [
                 {
-                  traceId: traceId,
-                  spanId: spanId,
+                  traceId: hexToBase64(traceIdHex),
+                  spanId: hexToBase64(spanIdHex),
                   name: span.name,
                   kind: 3, // SPAN_KIND_CLIENT
-                  startTimeUnixNano: toNanos(span.startTime),
-                  endTimeUnixNano: toNanos(span.endTime),
-                  attributes: [
-                    { key: 'llm.input', value: { stringValue: span.input.substring(0, 10000) } },
-                    { key: 'llm.output', value: { stringValue: span.output.substring(0, 10000) } },
-                    { key: 'llm.model', value: { stringValue: 'gemini-2.5-flash' } },
-                    { key: 'llm.provider', value: { stringValue: 'google' } },
-                    ...Object.entries(span.attributes).map(([key, value]) => ({
-                      key: `custom.${key}`,
-                      value: typeof value === 'number' 
-                        ? { intValue: Math.round(value).toString() }
-                        : { stringValue: String(value) },
-                    })),
-                  ],
+                  startTimeUnixNano: startTimeNanos,
+                  endTimeUnixNano: endTimeNanos,
+                  attributes: attributes,
                   status: { code: 1 }, // STATUS_CODE_OK
                 },
               ],
@@ -84,11 +105,12 @@ export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): P
       ],
     }
 
-    // Send to Arize OTLP endpoint
+    // Send to Arize OTLP endpoint with proper headers
     const response = await fetch('https://otlp.arize.com/v1/traces', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'authorization': `Bearer ${apiKey}`,
         'space_id': spaceId,
         'api_key': apiKey,
       },
@@ -99,13 +121,13 @@ export async function logToArize(span: Omit<ArizeSpan, 'traceId' | 'spanId'>): P
       const errorText = await response.text()
       console.log('[v0] Arize OTLP error:', response.status, errorText)
     } else {
-      console.log('[v0] Successfully logged to Arize:', traceId)
+      console.log('[v0] Successfully logged to Arize, trace:', traceIdHex)
     }
   } catch (error) {
     console.log('[v0] Failed to log to Arize:', error)
   }
 
-  return traceId
+  return traceIdHex
 }
 
 export function countBrandMentions(text: string, brand: string): number {
