@@ -10,8 +10,9 @@ function isValidBraintrustKey(key: string | undefined): boolean {
   return trimmed.startsWith('sk-') || trimmed.split('.').length === 3
 }
 
-const braintrustApiKey = process.env.BRAINTRUST_API_KEY
-const hasBraintrustKey = isValidBraintrustKey(braintrustApiKey)
+function getBraintrustApiKey(): string | undefined {
+  return process.env.BRAINTRUST_API_KEY
+}
 
 type GenAIClient = InstanceType<typeof googleGenAI.GoogleGenAI>
 let genAIClient: GenAIClient | null = null
@@ -21,12 +22,16 @@ let clientInitialized = false
 async function getGenAIClient(): Promise<GenAIClient> {
   if (clientInitialized && genAIClient) return genAIClient
 
+  const braintrustApiKey = getBraintrustApiKey()
+  const hasBraintrustKey = isValidBraintrustKey(braintrustApiKey)
+
   if (hasBraintrustKey && braintrustApiKey) {
     try {
       const { initLogger, wrapGoogleGenAI } = await import('braintrust')
       logger = initLogger({
         projectName: BRAINTRUST_PROJECT_NAME,
         apiKey: braintrustApiKey,
+        asyncFlush: false,
       })
       const { GoogleGenAI } = wrapGoogleGenAI(googleGenAI)
       genAIClient = new GoogleGenAI({
@@ -53,8 +58,9 @@ const genAI = new googleGenAI.GoogleGenAI({
 })
 
 async function getLogger() {
-  if (!hasBraintrustKey) return null
   if (logger) return logger
+  const braintrustApiKey = getBraintrustApiKey()
+  if (!isValidBraintrustKey(braintrustApiKey)) return null
   await getGenAIClient()
   return logger
 }
