@@ -1,5 +1,6 @@
 'use client'
 
+// Better Rank - Brand visibility analyzer
 import { useState, useCallback } from 'react'
 import { AnalysisForm } from '@/components/analysis-form'
 import { AnalysisProgress } from '@/components/analysis-progress'
