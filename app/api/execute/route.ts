@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
-import { logToArize, countBrandMentions } from '@/lib/arize'
+import { logToBraintrust, countBrandMentions, flushBraintrustLogs } from '@/lib/braintrust'
 import type { PromptExecution, AnalysisResult } from '@/lib/types'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const executions: PromptExecution[] = []
-    const arizeTraceIds: string[] = []
+    const braintrustSpanIds: string[] = []
     let totalBetterHelpMentions = 0
     let totalCompetitorMentions = 0
 
@@ -47,8 +47,8 @@ export async function POST(req: Request) {
       totalBetterHelpMentions += betterHelpCount
       totalCompetitorMentions += competitorCount
 
-      // Log to Arize
-      const traceId = await logToArize({
+      // Log to Braintrust
+      const spanId = await logToBraintrust({
         name: 'prompt_execution',
         input: prompt,
         output: responseText,
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         },
       })
 
-      arizeTraceIds.push(traceId)
+      braintrustSpanIds.push(spanId)
 
       const execution: PromptExecution = {
         id: uuidv4(),
@@ -79,13 +79,16 @@ export async function POST(req: Request) {
       executions.push(execution)
     }
 
+    // Flush logs to ensure they're sent
+    await flushBraintrustLogs()
+
     const analysisResult: AnalysisResult = {
       executions,
       totalBetterHelpMentions,
       totalCompetitorMentions,
       executionCount: frequency,
       competitor,
-      arizeTraceIds,
+      braintrustSpanIds,
     }
 
     return Response.json(analysisResult)

@@ -139,9 +139,9 @@ export function AnalysisResults({ analysis }: AnalysisResultsProps) {
             <FileText className="mr-2 h-4 w-4" />
             Responses
           </TabsTrigger>
-          <TabsTrigger value="arize">
+          <TabsTrigger value="braintrust">
             <Database className="mr-2 h-4 w-4" />
-            Arize Traces
+            Braintrust Logs
           </TabsTrigger>
         </TabsList>
 
@@ -284,32 +284,32 @@ export function AnalysisResults({ analysis }: AnalysisResultsProps) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="arize">
+        <TabsContent value="braintrust">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Arize AI Trace IDs</CardTitle>
+              <CardTitle className="text-base">Braintrust Log IDs</CardTitle>
               <CardDescription>
-                Traces logged to Arize for monitoring and analysis
+                Logs sent to Braintrust for monitoring and analysis
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {analysis.arizeTraceIds.map((traceId, i) => (
+                {analysis.braintrustSpanIds.map((spanId, i) => (
                   <div 
-                    key={traceId}
+                    key={spanId}
                     className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 px-3 py-2"
                   >
                     <span className="text-sm text-muted-foreground">
                       Execution {i + 1}
                     </span>
                     <code className="text-xs font-mono text-foreground">
-                      {traceId}
+                      {spanId}
                     </code>
                   </div>
                 ))}
               </div>
               <p className="mt-4 text-sm text-muted-foreground">
-                View these traces in your Arize AI dashboard for detailed monitoring and analysis.
+                View these logs in your Braintrust dashboard for detailed monitoring and analysis.
               </p>
             </CardContent>
           </Card>

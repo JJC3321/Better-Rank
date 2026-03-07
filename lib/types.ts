@@ -15,7 +15,7 @@ export interface AnalysisResult {
   totalCompetitorMentions: number
   executionCount: number
   competitor: string
-  arizeTraceIds: string[]
+  braintrustSpanIds: string[]
 }
 
 export interface WebsiteAnalysis {
