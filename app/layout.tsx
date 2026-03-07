@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'LLM Brand Monitor - AI Output Analysis & Optimization',
+  title: 'Better Rank - AI Output Analysis & Optimization',
   description: 'Monitor brand mentions in LLM outputs, analyze competitor presence, and optimize content for better AI visibility',
   generator: 'v0.app',
   icons: {
