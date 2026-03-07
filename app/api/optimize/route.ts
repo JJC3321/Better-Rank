@@ -1,7 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { client } from '@/lib/braintrust'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
@@ -23,8 +21,6 @@ export async function POST(req: Request) {
         { status: 500 }
       )
     }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `You are an expert in SEO, content optimization, and AI/LLM visibility strategies. 
 
@@ -71,9 +67,16 @@ Respond with a JSON object in the following exact format (no markdown, just pure
 
 Be specific, practical, and data-driven in your recommendations. Include at least 3-5 items in each category.`
 
-    const result = await model.generateContent(prompt)
-    const response = result.response
-    const responseText = response.text()
+    // Use the wrapped client - Braintrust automatically traces this call
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        maxOutputTokens: 4096,
+      },
+    })
+
+    const responseText = response.text
 
     // Parse the JSON response
     let optimization: OptimizationFeedback

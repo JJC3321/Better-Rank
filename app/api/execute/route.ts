@@ -1,9 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
-import { logToBraintrust, countBrandMentions, flushBraintrustLogs } from '@/lib/braintrust'
+import { client, countBrandMentions } from '@/lib/braintrust'
 import type { PromptExecution, AnalysisResult } from '@/lib/types'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
@@ -23,8 +20,6 @@ export async function POST(req: Request) {
       )
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
     const executions: PromptExecution[] = []
     const braintrustSpanIds: string[] = []
     let totalBetterHelpMentions = 0
@@ -32,13 +27,18 @@ export async function POST(req: Request) {
 
     // Execute the prompt multiple times based on frequency
     for (let i = 0; i < frequency; i++) {
-      const startTime = Date.now()
+      const spanId = uuidv4()
       
-      const result = await model.generateContent(prompt)
-      const response = result.response
-      const responseText = response.text()
+      // Use the wrapped client - Braintrust automatically traces this call
+      const response = await client.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          maxOutputTokens: 2048,
+        },
+      })
 
-      const endTime = Date.now()
+      const responseText = response.text
 
       // Count brand mentions
       const betterHelpCount = countBrandMentions(responseText, 'BetterHelp')
@@ -46,22 +46,6 @@ export async function POST(req: Request) {
 
       totalBetterHelpMentions += betterHelpCount
       totalCompetitorMentions += competitorCount
-
-      // Log to Braintrust
-      const spanId = await logToBraintrust({
-        name: 'prompt_execution',
-        input: prompt,
-        output: responseText,
-        startTime,
-        endTime,
-        attributes: {
-          execution_index: i + 1,
-          total_executions: frequency,
-          betterhelp_mentions: betterHelpCount,
-          competitor_mentions: competitorCount,
-          competitor_name: competitor,
-        },
-      })
 
       braintrustSpanIds.push(spanId)
 
@@ -78,9 +62,6 @@ export async function POST(req: Request) {
 
       executions.push(execution)
     }
-
-    // Flush logs to ensure they're sent
-    await flushBraintrustLogs()
 
     const analysisResult: AnalysisResult = {
       executions,
