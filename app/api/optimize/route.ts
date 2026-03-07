@@ -1,6 +1,8 @@
 import { genAI } from '@/lib/braintrust'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
+// Optimization route for generating content recommendations
+
 export async function POST(req: Request) {
   try {
     const { analysis, websiteAnalysis } = await req.json() as {
