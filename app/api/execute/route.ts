@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       const startTime = Date.now()
       
       const result = await generateText({
-        model: google('gemini-2.5-flash-preview-04-17'),
+        model: google('gemini-2.5-flash'),
         prompt: prompt,
         maxOutputTokens: 2048,
       })
