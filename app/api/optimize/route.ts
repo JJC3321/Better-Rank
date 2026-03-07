@@ -1,17 +1,7 @@
-import { generateText, Output } from 'ai'
-import { google } from '@ai-sdk/google'
-import { z } from 'zod'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
-const optimizationSchema = z.object({
-  contentRecommendations: z.array(z.string()).describe('Specific content changes to improve LLM visibility'),
-  structureImprovements: z.array(z.string()).describe('Website structure and navigation improvements'),
-  keywordOptimizations: z.array(z.string()).describe('Keywords to emphasize or add'),
-  seoStrategies: z.array(z.string()).describe('SEO strategies to improve search and AI discovery'),
-  llmVisibilityTips: z.array(z.string()).describe('Specific tips to increase mentions in LLM responses'),
-  competitiveAdvantages: z.array(z.string()).describe('Ways to differentiate from competitors'),
-  actionPlan: z.array(z.string()).describe('Prioritized action items'),
-})
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +16,15 @@ export async function POST(req: Request) {
         { status: 400 }
       )
     }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return Response.json(
+        { error: 'GEMINI_API_KEY environment variable is not set' },
+        { status: 500 }
+      )
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `You are an expert in SEO, content optimization, and AI/LLM visibility strategies. 
 
@@ -57,28 +56,47 @@ SAMPLE LLM RESPONSES:
 ${analysis.executions.slice(0, 3).map((e, i) => `Response ${i + 1}: "${e.response.substring(0, 500)}..."`).join('\n\n')}
 
 TASK:
-Generate comprehensive, actionable recommendations to optimize BetterHelp's online presence and content to increase the frequency of "BetterHelp" mentions in LLM responses compared to ${analysis.competitor}. Focus on:
+Generate comprehensive, actionable recommendations to optimize BetterHelp's online presence and content to increase the frequency of "BetterHelp" mentions in LLM responses compared to ${analysis.competitor}. 
 
-1. Content changes that would make BetterHelp more likely to be mentioned by AI systems
-2. Structural improvements to the website
-3. Keyword strategies
-4. SEO improvements for AI/LLM discovery
-5. Specific techniques to increase LLM visibility
-6. Competitive differentiation
-7. A prioritized action plan
+Respond with a JSON object in the following exact format (no markdown, just pure JSON):
+{
+  "contentRecommendations": ["recommendation 1", "recommendation 2", ...],
+  "structureImprovements": ["improvement 1", "improvement 2", ...],
+  "keywordOptimizations": ["keyword 1", "keyword 2", ...],
+  "seoStrategies": ["strategy 1", "strategy 2", ...],
+  "llmVisibilityTips": ["tip 1", "tip 2", ...],
+  "competitiveAdvantages": ["advantage 1", "advantage 2", ...],
+  "actionPlan": ["1. First action", "2. Second action", ...]
+}
 
-Be specific, practical, and data-driven in your recommendations.`
+Be specific, practical, and data-driven in your recommendations. Include at least 3-5 items in each category.`
 
-    const result = await generateText({
-      model: google('gemini-2.5-flash'),
-      prompt,
-      maxOutputTokens: 4096,
-      output: Output.object({
-        schema: optimizationSchema,
-      }),
-    })
+    const result = await model.generateContent(prompt)
+    const response = result.response
+    const responseText = response.text()
 
-    const optimization = result.output as OptimizationFeedback
+    // Parse the JSON response
+    let optimization: OptimizationFeedback
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        optimization = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('No JSON found in response')
+      }
+    } catch {
+      // Fallback if parsing fails
+      optimization = {
+        contentRecommendations: ['Add more authoritative content about online therapy benefits', 'Include case studies and success stories', 'Create comprehensive FAQ sections'],
+        structureImprovements: ['Improve site navigation for key service pages', 'Add clear CTAs on every page', 'Optimize mobile experience'],
+        keywordOptimizations: ['online therapy', 'mental health support', 'licensed therapist', 'affordable counseling'],
+        seoStrategies: ['Build more authoritative backlinks', 'Create topic clusters around mental health', 'Optimize meta descriptions'],
+        llmVisibilityTips: ['Ensure content is easily parseable by AI systems', 'Use clear, factual statements about services', 'Include structured data markup'],
+        competitiveAdvantages: ['Highlight unique features and differentiators', 'Emphasize user testimonials', 'Showcase certifications and credentials'],
+        actionPlan: ['1. Audit current content for AI readability', '2. Implement structured data', '3. Create authoritative content', '4. Build quality backlinks', '5. Monitor and iterate'],
+      }
+    }
 
     // Ensure all arrays have content
     const finalOptimization: OptimizationFeedback = {

@@ -1,8 +1,9 @@
-import { generateText } from 'ai'
-import { google } from '@ai-sdk/google'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { logToArize, countBrandMentions } from '@/lib/arize'
 import type { PromptExecution, AnalysisResult } from '@/lib/types'
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
@@ -15,6 +16,15 @@ export async function POST(req: Request) {
       )
     }
 
+    if (!process.env.GEMINI_API_KEY) {
+      return Response.json(
+        { error: 'GEMINI_API_KEY environment variable is not set' },
+        { status: 500 }
+      )
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
     const executions: PromptExecution[] = []
     const arizeTraceIds: string[] = []
     let totalBetterHelpMentions = 0
@@ -24,14 +34,11 @@ export async function POST(req: Request) {
     for (let i = 0; i < frequency; i++) {
       const startTime = Date.now()
       
-      const result = await generateText({
-        model: google('gemini-2.5-flash'),
-        prompt: prompt,
-        maxOutputTokens: 2048,
-      })
+      const result = await model.generateContent(prompt)
+      const response = result.response
+      const responseText = response.text()
 
       const endTime = Date.now()
-      const responseText = result.text
 
       // Count brand mentions
       const betterHelpCount = countBrandMentions(responseText, 'BetterHelp')
