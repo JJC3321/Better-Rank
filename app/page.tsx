@@ -120,7 +120,7 @@ export default function HomePage() {
               <Brain className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">{APP_NAME}</h1>
+              <h1 className="text-xl font-bold tracking-tight" suppressHydrationWarning>{APP_NAME}</h1>
               <p className="text-xs text-muted-foreground">
                 Analyze and optimize brand visibility in AI responses
               </p>
