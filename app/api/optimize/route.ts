@@ -1,7 +1,10 @@
-import { genAI } from '@/lib/braintrust'
+import { GoogleGenAI } from '@google/genai'
 import type { AnalysisResult, WebsiteAnalysis, OptimizationFeedback } from '@/lib/types'
 
-// Optimization route for generating content recommendations
+// Initialize Google AI SDK directly to avoid import issues
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+})
 
 export async function POST(req: Request) {
   try {
@@ -69,7 +72,6 @@ Respond with a JSON object in the following exact format (no markdown, just pure
 
 Be specific, practical, and data-driven in your recommendations. Include at least 3-5 items in each category.`
 
-    // Use the Google GenAI client
     const response = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -80,10 +82,8 @@ Be specific, practical, and data-driven in your recommendations. Include at leas
 
     const responseText = response.text
 
-    // Parse the JSON response
     let optimization: OptimizationFeedback
     try {
-      // Try to extract JSON from the response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         optimization = JSON.parse(jsonMatch[0])
@@ -91,7 +91,6 @@ Be specific, practical, and data-driven in your recommendations. Include at leas
         throw new Error('No JSON found in response')
       }
     } catch {
-      // Fallback if parsing fails
       optimization = {
         contentRecommendations: ['Add more authoritative content about online therapy benefits', 'Include case studies and success stories', 'Create comprehensive FAQ sections'],
         structureImprovements: ['Improve site navigation for key service pages', 'Add clear CTAs on every page', 'Optimize mobile experience'],
@@ -103,7 +102,6 @@ Be specific, practical, and data-driven in your recommendations. Include at leas
       }
     }
 
-    // Ensure all arrays have content
     const finalOptimization: OptimizationFeedback = {
       contentRecommendations: optimization?.contentRecommendations?.length 
         ? optimization.contentRecommendations 
