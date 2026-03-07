@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
-import { client, countBrandMentions } from '@/lib/braintrust'
+import { tracedGeminiCall, countBrandMentions, flushLogs } from '@/lib/braintrust'
 import type { PromptExecution, AnalysisResult } from '@/lib/types'
 
 export async function POST(req: Request) {
@@ -27,18 +27,8 @@ export async function POST(req: Request) {
 
     // Execute the prompt multiple times based on frequency
     for (let i = 0; i < frequency; i++) {
-      const spanId = uuidv4()
-      
-      // Use the wrapped client - Braintrust automatically traces this call
-      const response = await client.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          maxOutputTokens: 2048,
-        },
-      })
-
-      const responseText = response.text
+      // Use the traced wrapper - automatically logs to Braintrust
+      const { text: responseText, spanId } = await tracedGeminiCall(prompt, i + 1)
 
       // Count brand mentions
       const betterHelpCount = countBrandMentions(responseText, 'BetterHelp')
@@ -62,6 +52,9 @@ export async function POST(req: Request) {
 
       executions.push(execution)
     }
+
+    // Flush logs to ensure they're sent to Braintrust
+    await flushLogs()
 
     const analysisResult: AnalysisResult = {
       executions,
