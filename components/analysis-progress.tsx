@@ -11,7 +11,7 @@ interface AnalysisProgressProps {
 
 const steps = [
   { key: 'executing', label: 'Executing prompts with Gemini Flash 2.5', description: 'Running multiple prompt executions' },
-  { key: 'logging', label: 'Logging to Arize AI', description: 'Storing outputs for monitoring' },
+  { key: 'logging', label: 'Logging to Braintrust', description: 'Storing outputs for monitoring' },
   { key: 'analyzing', label: 'Analyzing websites with Tavily', description: 'Extracting insights from BetterHelp and competitor' },
   { key: 'optimizing', label: 'Generating optimization feedback', description: 'Creating actionable recommendations' },
 ]

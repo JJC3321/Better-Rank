@@ -158,7 +158,7 @@ export default function HomePage() {
                 <span className="text-border">|</span>
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4 text-chart-1" />
-                  <span>Arize AI Monitoring</span>
+                  <span>Braintrust Monitoring</span>
                 </div>
                 <span className="text-border">|</span>
                 <div className="flex items-center gap-1.5">
@@ -237,7 +237,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="mt-auto border-t border-border/50 bg-card/30 py-4">
         <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
-          Powered by Gemini Flash 2.5, Arize AI, and Tavily
+          Powered by Gemini Flash 2.5, Braintrust, and Tavily
         </div>
       </footer>
     </main>
